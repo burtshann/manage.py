@@ -456,7 +456,7 @@ def run_pygame_game():
 
         if not game_over:
             play.update()
-
+            # 111
             # 生成障碍物
             # clock.tick(30)每秒30帧数
             # 此处是每帧的生成概率概率相当于1/x*帧数
