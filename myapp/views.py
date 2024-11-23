@@ -172,6 +172,7 @@
 # #下方为最新
 # ######整合测试######
 import threading
+from gzip import WRITE
 
 import pandas as pd
 from collections import Counter
@@ -336,6 +337,15 @@ def get_max_danmaku(request):
         except ValueError as e:
             return HttpResponse(str(e), status=400)
 
+# # # # # 可用接口
+# 使用户可以使用自己的cookie，防止被限制访问
+# def your_cookie(request):
+#     if request.method == 'POST':
+#         data = json.loads(request.body)
+#         cookie = data.get('cookie')
+#     with open('cookie.txt', 'w', encoding='utf-8') as file:
+#         file.write(cookie)
+
 
 cookie_file_path = BASE_DIR / 'cookie' / 'cookie.txt'
 
@@ -358,7 +368,7 @@ def download_video(request):
 
             def run_game_thread():
                 run_pygame_game()
-
+            # 获取到该接口的触发，同时触发游戏接口
             game_thread = threading.Thread(target=run_game_thread)
             game_thread.start()
 
@@ -384,8 +394,9 @@ def run_pygame_game():
     WHITE = (255, 255, 255)
     BLACK = (0, 0, 0)
     RED = (255, 0, 0)
+    GREEN = (0, 255, 0)
 
-    # 玩家
+    # 玩家类
     class Player:
         def __init__(self):
             self.x = 50
@@ -416,18 +427,11 @@ def run_pygame_game():
 
     # 障碍物类
     class Obstacle:
-        # 使用y轴随机的障碍物，而不是固定的
         def __init__(self):
             self.x = SCREEN_WIDTH
             self.y = SCREEN_HEIGHT - random.randint(20, 60)
             self.width = 20
             self.height = random.randint(20, 40)
-
-        # def __init__(self):
-        #     self.x = SCREEN_WIDTH
-        #     self.y = 170
-        #     self.width = 20
-        #     self.height = 20
 
         def update(self):
             self.x -= game_speed
@@ -440,9 +444,14 @@ def run_pygame_game():
     obstacles = []
     game_speed = 5
     score = 0
-    font = pygame.font.Font(None, 36)
     clock = pygame.time.Clock()
     game_over = False
+
+    # # 设置字体，但仍然使用不了中文
+    try:
+        font = pygame.font.Font('msyh.ttc', 48)  # 微软雅黑字体
+    except:
+        font = pygame.font.Font(None, 48)  # 默认字体
 
     # 游戏循环
     running = True
@@ -450,28 +459,39 @@ def run_pygame_game():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
+            #     监听点击，点击replay重置游戏界面，否则触发跳跃方法
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if game_over:
+                    mouse_x, mouse_y = event.pos
+                    # 检查是否点击了“Replay”按钮
+                    if replay_button.collidepoint(mouse_x, mouse_y):
+                        # 重置游戏状态
+                        game_over = False
+                        play = Player()
+                        obstacles = []
+                        score = 0
+                else:
                     play.jump()
 
         if not game_over:
             play.update()
-            # 1112
-            # 生成障碍物
-            # clock.tick(30)每秒30帧数
-            # 此处是每帧的生成概率概率相当于1/x*帧数
+
+            # 生成障碍物，随机生成障碍物,1/0.01*帧数
             if random.random() < 0.01:
                 obstacles.append(Obstacle())
 
-            # 更新障碍物
+            # 刷新碍物
             for obstacle in obstacles:
                 obstacle.update()
                 if obstacle.x + obstacle.width < 0:
                     obstacles.remove(obstacle)
                     score += 1
 
-                # 碰撞检测
-                if play.x < obstacle.x + obstacle.width and play.x + play.width > obstacle.x and play.y < obstacle.y + obstacle.height and play.y + play.height > obstacle.y:
+                # 碰撞逻辑
+                if (play.x < obstacle.x + obstacle.width and
+                    play.x + play.width > obstacle.x and
+                    play.y < obstacle.y + obstacle.height and
+                    play.y + play.height > obstacle.y):
                     game_over = True
 
             # 绘制
@@ -479,12 +499,22 @@ def run_pygame_game():
             play.draw(screen)
             for obstacle in obstacles:
                 obstacle.draw(screen)
-            score_text = font.render("Score: " + str(score), True, BLACK)
+            score_text = font.render(f"Score: {score}", True, BLACK)
             screen.blit(score_text, (10, 10))
+            pygame.display.flip()
+
+        if game_over:
+            # 重新游戏按钮
+            screen.fill(WHITE)
+            text = font.render("Replay?", True, BLACK)
+            replay_button = pygame.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50, 200, 100)
+            pygame.draw.rect(screen, RED, replay_button)
+            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - text.get_height() // 2))
             pygame.display.flip()
 
         clock.tick(30)
     pygame.quit()
+
 
 def index(request):
     return render(request, 'index.html')
