@@ -387,7 +387,7 @@ def download_video(request):
                 'format': 'bestvideo[height<=720]+bestaudio/best',
                 # 'outtmpl': 'downloaded_video.%(ext)s',
                 # 保存地址到下一级文件夹内
-                'outtmpl': f'download/downloaded_video.mp4',
+                # 'outtmpl': f'download/downloaded_video.mp4',
                 # 可配合delete_downloaded_video方法实现更新
                 # 'outtmpl': 'download/%(url[-3:])s.%(ext)s',
                 # 错误：截取url最后三位作为文件名，截取到的内容与前端地址栏中显示的不符
