@@ -193,13 +193,17 @@ from djangoProject1.settings import BASE_DIR
 from collections import defaultdict
 import pygame
 import random
+import re
+import requests
+from bs4 import BeautifulSoup
+from openpyxl import Workbook
 
 # 抓取Bilibili弹幕的函数
 def fetch_danmaku_data(video_url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-    response = requests.get(video_url, headers=headers)
+    response = requests.get(video_url, headers=headers,verify=False)
     response.encoding = 'utf-8'
     html_content = response.text
 
@@ -552,3 +556,99 @@ def run_pygame_game():
 
 def index(request):
     return render(request, 'index.html')
+
+def write_error_log(message):
+    with open("video_errorlist.txt", "a") as file:
+        file.write(message + "\n")
+
+
+@csrf_exempt
+def download_excel(request):
+    header = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.2088.76",
+        "Referer": "https://www.bilibili.com/",  # 设置防盗链
+    }
+    new_wb = Workbook()
+    new_ws = new_wb.active
+    new_ws.append(
+        ["标题", "链接", "up主", "up主id", "精确播放数", "历史累计弹幕数", "点赞数", "投硬币枚数", "收藏人数",
+         "转发人数",
+         "发布时间", "视频时长(秒)", "视频简介", "作者简介", "标签", "视频aid"])
+    output_folder = "./download"
+    output_file = os.path.join(output_folder, "output.xlsx")
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        url = data.get('url')
+        try:
+            response = requests.get(url=url, headers=header,verify=False)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 视频 aid、视频时长和作者 id
+            initial_state_script = soup.find(string=re.compile("window.__INITIAL_STATE__"))
+            initial_state_text = initial_state_script.string
+
+            author_id_pattern = re.compile(r'"mid":(\d+)')
+            video_aid_pattern = re.compile(r'"aid":(\d+)')
+            video_duration_pattern = re.compile(r'"duration":(\d+)')
+
+            author_id = author_id_pattern.search(initial_state_text).group(1)
+            video_aid = video_aid_pattern.search(initial_state_text).group(1)
+            video_duration_raw = int(video_duration_pattern.search(initial_state_text).group(1))
+            video_duration = video_duration_raw - 2
+
+            # 提取标题
+            title_raw = soup.find("title").text
+            title = re.sub(r"_哔哩哔哩_bilibili", "", title_raw).strip()
+
+            # 提取标签
+            keywords_content = soup.find("meta", itemprop="keywords")["content"]
+            content_without_title = keywords_content.replace(title + ',', '')
+            keywords_list = content_without_title.split(',')
+            tags = ",".join(keywords_list[:-4])
+
+            meta_description = soup.find("meta", itemprop="description")["content"]
+            numbers = re.findall(
+                r'[\s\S]*?视频播放量 (\d+)、弹幕量 (\d+)、点赞数 (\d+)、投硬币枚数 (\d+)、收藏人数 (\d+)、转发人数 (\d+)',
+                meta_description)
+
+            # 提取作者
+            author_search = re.search(r"视频作者\s*([^,]+)", meta_description)
+            if author_search:
+                author = author_search.group(1).strip()
+            else:
+                author = "未找到作者"
+
+            # 提取作者简介
+            author_desc_pattern = re.compile(r'作者简介 (.+?),')
+            author_desc_match = author_desc_pattern.search(meta_description)
+            if author_desc_match:
+                author_desc = author_desc_match.group(1)
+            else:
+                author_desc = "未找到作者简介"
+
+            # 提取视频简介
+            meta_parts = re.split(r',\s*', meta_description)
+            if meta_parts:
+                video_desc = meta_parts[0].strip()
+            else:
+                video_desc = "未找到视频简介"
+
+            if numbers:
+                views, danmaku, likes, coins, favorites, shares = [int(n) for n in numbers[0]]
+                publish_date = soup.find("meta", itemprop="uploadDate")["content"]
+                new_ws.append(
+                    [title, url, author, author_id, views, danmaku, likes, coins, favorites, shares, publish_date,
+                     video_duration, video_desc, author_desc, tags, video_aid])
+                print(f"视频{url}已完成爬取")
+
+            else:
+                print(f"视频 {url}未找到相关数据，可能为分集视频")
+                return HttpResponse("Excel未找到相关数据！")
+
+        except Exception as e:
+            write_error_log(f"视频发生错误：{e}")
+            print(f"发生错误，已记录到错误日志:出错数据为{url}")
+            return HttpResponse("无效的 URL！")
+
+    new_wb.save(output_file)
+    return HttpResponse("Excel下载完成！")

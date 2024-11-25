@@ -27,7 +27,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path
-from myapp.views import index, get_high_freq_data, download_video, get_max_danmaku,run_pygame_game
+from myapp.views import index, get_high_freq_data, download_video, get_max_danmaku,run_pygame_game,download_excel
 
 # urlpatterns = [
 #     path('admin/', admin.site.urls),
@@ -64,6 +64,7 @@ urlpatterns = [
     path('get_high_freq_data/', get_high_freq_data, name='get_high_freq_data'),  # 高频词数据
     path('download_video/', download_video, name='download_video'),
     path('get_max_danmaku/', get_max_danmaku, name='get_max_danmaku'),
+    path('download_excel/', download_excel, name='download_excel'),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.DOWNLOAD_URL, document_root=settings.DOWNLOAD_ROOT)
