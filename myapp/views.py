@@ -187,6 +187,8 @@ import requests
 import xml.etree.ElementTree as ET
 from django.views.decorators.csrf import csrf_exempt
 import yt_dlp as ydl
+from urllib3 import request
+
 from djangoProject1.settings import BASE_DIR
 from collections import defaultdict
 import pygame
@@ -349,19 +351,50 @@ def get_max_danmaku(request):
 
 cookie_file_path = BASE_DIR / 'cookie' / 'cookie.txt'
 
+# 清空download文件夹实现改文件夹中视频更新
+def delete_downloaded_video():
+    folder_path = 'download'
+    file_name = 'downloaded_video.mp4'
+    file_path = os.path.join(folder_path, file_name)
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"文件 {file_name} 已成功删除。")
+        else:
+            print(f"文件 {file_name} 不存在。")
+    except Exception as e:
+        print(f"删除文件时出错：{e}")
+
+def new_video_name(url):
+    # 假设 URL 中 'source=' 后面的部分是视频名称
+    return url.split('source=')[-1]
+
 @csrf_exempt
 def download_video(request):
+    try:
+        delete_downloaded_video()
+    except Exception as e:
+        print("未找到下载视频")
     if request.method == 'POST':
         data = json.loads(request.body)
         url = data.get('url')
-
         if url:
+            video_name = new_video_name(url)
             ydl_opts = {
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
                 },
                 'format': 'bestvideo[height<=720]+bestaudio/best',
-                'outtmpl': 'downloaded_video.%(ext)s',
+                # 'outtmpl': 'downloaded_video.%(ext)s',
+                # 保存地址到下一级文件夹内
+                'outtmpl': f'download/downloaded_video.mp4',
+                # 可配合delete_downloaded_video方法实现更新
+                # 'outtmpl': 'download/%(url[-3:])s.%(ext)s',
+                # 错误：截取url最后三位作为文件名，截取到的内容与前端地址栏中显示的不符
+                # 'outtmpl': 'download/%(video_name)s.%(ext)s',
+                # 错误：无法直接使用
+                'outtmpl': f'download/{video_name}.%(ext)s',
+                # 成功：以source=后截取，便于前端也可以简单获取
                 'cookiefile': str(cookie_file_path),
                 'verbose': True,
             }
@@ -404,7 +437,9 @@ def run_pygame_game():
             self.width = 20
             self.height = 20
             self.dy = 0
+            # 下落速度；值越大落越快
             self.gravity = 0.6
+            # 跳跃高度；值越小跳越高
             self.jump_power = -10
             self.grounded = False
 
@@ -487,7 +522,7 @@ def run_pygame_game():
                     obstacles.remove(obstacle)
                     score += 1
 
-                # 碰撞逻辑
+                # 碰撞逻辑,玩家角色与障碍物出现重叠为碰撞
                 if (play.x < obstacle.x + obstacle.width and
                     play.x + play.width > obstacle.x and
                     play.y < obstacle.y + obstacle.height and
