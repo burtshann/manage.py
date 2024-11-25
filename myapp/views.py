@@ -366,8 +366,7 @@ def delete_downloaded_video():
         print(f"删除文件时出错：{e}")
 
 def new_video_name(url):
-    # 假设 URL 中 'source=' 后面的部分是视频名称
-    return url.split('source=')[-1]
+    return url.split("video/")[1].split("/?")[0]
 
 @csrf_exempt
 def download_video(request):
@@ -394,7 +393,7 @@ def download_video(request):
                 # 'outtmpl': 'download/%(video_name)s.%(ext)s',
                 # 错误：无法直接使用
                 'outtmpl': f'download/{video_name}.%(ext)s',
-                # 成功：以source=后截取，便于前端也可以简单获取
+                # 成功：以video/后截取，便于前端也可以简单获取
                 'cookiefile': str(cookie_file_path),
                 'verbose': True,
             }
